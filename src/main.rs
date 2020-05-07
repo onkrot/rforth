@@ -15,7 +15,7 @@ fn eval_str(str: Vec<ForthExp>, env: &mut ForthEnv) -> Result<(), ForthErr> {
     Ok(())
 }
 
-fn eval(exp: ForthExp, env: &mut ForthEnv) -> ForthResult<()>  {
+fn eval(exp: ForthExp, env: &mut ForthEnv) -> ForthResult<()> {
     match exp {
         ForthExp::Op(op) => {
             let func = env.get_op(op)?.clone();
@@ -26,6 +26,16 @@ fn eval(exp: ForthExp, env: &mut ForthEnv) -> ForthResult<()>  {
                         eval(e, env)?;
                     }
                 }
+                ForthFunc::Variable => {}
+                ForthFunc::ConstantDef(name) => match env.pop_num() {
+                    Ok(num) => {
+                        env.words.insert(
+                            ForthOp::Constant(name.clone()),
+                            ForthFunc::User(vec![ForthExp::Number(num)]),
+                        );
+                    }
+                    Err(_) => return Err(ForthErr::Msg("No constant value".to_string())),
+                },
             }
         }
         ForthExp::Number(a) => env.push(ForthExp::Number(a)),
@@ -33,12 +43,8 @@ fn eval(exp: ForthExp, env: &mut ForthEnv) -> ForthResult<()>  {
     Ok(())
 }
 
-fn parse_eval(expr: &str, env: &mut ForthEnv) -> ForthResult<()>  {
-    let (parsed_exp, new_words) = parse(&tokenize(expr))?;
-    for new_word in new_words {
-        env.words
-            .insert(ForthOp::UserWord(new_word.0), ForthFunc::User(new_word.1));
-    }
+fn parse_eval(expr: &str, env: &mut ForthEnv) -> ForthResult<()> {
+    let parsed_exp = parse(&tokenize(expr), env)?;
     eval_str(parsed_exp, env)?;
 
     Ok(())
@@ -55,11 +61,11 @@ fn slurp_expr() -> String {
 }
 
 fn main() {
-    let env = &mut default_env();
+    let mut env = default_env();
     loop {
         println!("rforth >");
         let expr = slurp_expr();
-        match parse_eval(&expr, env) {
+        match parse_eval(&expr, &mut env) {
             Ok(_) => {
                 print!("// stack => ");
                 for exp in &env.stack {

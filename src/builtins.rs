@@ -54,9 +54,12 @@ macro_rules! checked_div {
 pub fn default_env() -> ForthEnv {
     let mut words: HashMap<ForthOp, ForthFunc> = HashMap::new();
 
-    n_ary_op!(words, ForthOp::Add, 2, |x: [i64; 2]| x[1].wrapping_add(x[0]));
-    n_ary_op!(words, ForthOp::Sub, 2, |x: [i64; 2]| x[1].wrapping_sub(x[0]));
-    n_ary_op!(words, ForthOp::Mul, 2, |x: [i64; 2]| x[1].wrapping_mul(x[0]));
+    n_ary_op!(words, ForthOp::Add, 2, |x: [i64; 2]| x[1]
+        .wrapping_add(x[0]));
+    n_ary_op!(words, ForthOp::Sub, 2, |x: [i64; 2]| x[1]
+        .wrapping_sub(x[0]));
+    n_ary_op!(words, ForthOp::Mul, 2, |x: [i64; 2]| x[1]
+        .wrapping_mul(x[0]));
     checked_div!(words, ForthOp::Div, 2, |x: [i64; 2]| x[1] / x[0]);
     checked_div!(words, ForthOp::Mod, 2, |x: [i64; 2]| x[1] % x[0]);
     generic_op!(
@@ -74,7 +77,8 @@ pub fn default_env() -> ForthEnv {
             return Ok(());
         }
     );
-    checked_div!(words, ForthOp::FMD, 3, |x: [i64; 3]| x[2].wrapping_mul(x[1])
+    checked_div!(words, ForthOp::FMD, 3, |x: [i64; 3]| x[2]
+        .wrapping_mul(x[1])
         / x[0]);
     generic_op!(
         words,
@@ -100,16 +104,89 @@ pub fn default_env() -> ForthEnv {
     n_ary_op!(words, ForthOp::Sub2, 1, |x: [i64; 1]| x[0].wrapping_sub(2));
     n_ary_op!(words, ForthOp::Mul2, 1, |x: [i64; 1]| x[0].wrapping_mul(2));
     n_ary_op!(words, ForthOp::Div2, 1, |x: [i64; 1]| x[0] / 2);
-    n_ary_op!(words, ForthOp::And, 2, |x: [i64; 2]| if x[0] != 0 && x[1] != 0 { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Or, 2, |x: [i64; 2]| if x[0] != 0 || x[1] != 0 { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Xor, 2, |x: [i64; 2]| if (x[0] != 0) != (x[1] != 0) { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Not, 1, |x: [i64; 1]| if x[0] != 0 { 0 } else { 1 });
-    n_ary_op!(words, ForthOp::Lt, 2, |x: [i64; 2]| if x[1] < x[0] { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Eq, 2, |x: [i64; 2]| if x[1] == x[0] { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Gt, 2, |x: [i64; 2]| if x[1] > x[0] { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Le, 2, |x: [i64; 2]| if x[1] <= x[0] { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Ge, 2, |x: [i64; 2]| if x[1] >= x[0] { 1 } else { 0 });
-    n_ary_op!(words, ForthOp::Ne, 2, |x: [i64; 2]| if x[1] != x[0] { 1 } else { 0 });
+    n_ary_op!(
+        words,
+        ForthOp::And,
+        2,
+        |x: [i64; 2]| if x[0] != 0 && x[1] != 0 { 1 } else { 0 }
+    );
+    n_ary_op!(
+        words,
+        ForthOp::Or,
+        2,
+        |x: [i64; 2]| if x[0] != 0 || x[1] != 0 { 1 } else { 0 }
+    );
+    n_ary_op!(
+        words,
+        ForthOp::Xor,
+        2,
+        |x: [i64; 2]| if (x[0] != 0) != (x[1] != 0) { 1 } else { 0 }
+    );
+    n_ary_op!(words, ForthOp::Not, 1, |x: [i64; 1]| if x[0] != 0 {
+        0
+    } else {
+        1
+    });
+    n_ary_op!(words, ForthOp::Lt, 2, |x: [i64; 2]| if x[1] < x[0] {
+        1
+    } else {
+        0
+    });
+    n_ary_op!(words, ForthOp::Eq, 2, |x: [i64; 2]| if x[1] == x[0] {
+        1
+    } else {
+        0
+    });
+    n_ary_op!(words, ForthOp::Gt, 2, |x: [i64; 2]| if x[1] > x[0] {
+        1
+    } else {
+        0
+    });
+    n_ary_op!(words, ForthOp::Le, 2, |x: [i64; 2]| if x[1] <= x[0] {
+        1
+    } else {
+        0
+    });
+    n_ary_op!(words, ForthOp::Ge, 2, |x: [i64; 2]| if x[1] >= x[0] {
+        1
+    } else {
+        0
+    });
+    n_ary_op!(words, ForthOp::Ne, 2, |x: [i64; 2]| if x[1] != x[0] {
+        1
+    } else {
+        0
+    });
+    generic_op!(
+        words,
+        ForthOp::GetVar,
+        |env: &mut ForthEnv| -> ForthResult<()> {
+            let name = env.parser.get_var_name()?;
+            let a = env
+                .variables
+                .get(&name)
+                .ok_or(ForthErr::Msg(format!("Undefined variable")))?
+                .clone();
+            env.push(ForthExp::Number(a));
+            return Ok(());
+        }
+    );
+    generic_op!(
+        words,
+        ForthOp::SetVar,
+        |env: &mut ForthEnv| -> ForthResult<()> {
+            let name = env.parser.get_var_name()?;
+            if env.words.contains_key(&ForthOp::Constant(name.clone())) {
+                return Err(ForthErr::Msg("Cannot reset constant".to_string()));
+            } else if env.words.contains_key(&ForthOp::Variable(name.clone())) {
+                let a = env.pop_num()?;
+                env.variables.insert(name, a);
+                return Ok(());
+            } else {
+                return Err(ForthErr::Msg("Undefined variable".to_string()));
+            };
+        }
+    );
     generic_op!(
         words,
         ForthOp::Dup,
@@ -213,7 +290,12 @@ pub fn default_env() -> ForthEnv {
     );
 
     ForthEnv {
-        words: words,
+        words,
         stack: vec![],
+        variables: HashMap::new(),
+        parser: ForthParser {
+            tokens: vec![],
+            cur: 0,
+        },
     }
 }

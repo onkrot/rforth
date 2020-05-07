@@ -12,6 +12,8 @@ pub enum ForthExp {
 pub enum ForthFunc {
     Native(fn(&mut ForthEnv) -> Result<(), ForthErr>),
     User(Vec<ForthExp>),
+    Variable,
+    ConstantDef(String),
 }
 
 pub enum ForthErr {
@@ -24,6 +26,14 @@ pub type ForthResult<T> = ::std::result::Result<T, ForthErr>;
 pub struct ForthEnv {
     pub words: HashMap<ForthOp, ForthFunc>,
     pub stack: Vec<ForthExp>,
+    pub variables: HashMap<String, i64>,
+    pub parser: ForthParser,
+}
+
+#[derive(Clone)]
+pub struct ForthParser {
+    pub tokens: Vec<String>,
+    pub cur: usize,
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -62,6 +72,10 @@ pub enum ForthOp {
     Le,
     Ge,
     Ne,
+    Variable(String),
+    Constant(String),
+    GetVar,
+    SetVar,
     UserWord(String),
 }
 
@@ -100,5 +114,26 @@ impl ForthEnv {
         self.words
             .get(&op)
             .ok_or(ForthErr::Msg(format!("Not implemented {}", op)))
+    }
+}
+
+impl ForthParser {
+    pub fn next(&mut self) -> ForthResult<String> {
+        if self.cur < self.tokens.len() {
+            self.cur += 1;
+            Ok(self.tokens[self.cur - 1].clone())
+        } else {
+            Err(ForthErr::Msg("No next token".to_string()))
+        }
+    }
+    pub fn get_cur(&self) -> String {
+        self.tokens[self.cur].clone()
+    }
+    pub fn get_var_name(&self) -> ForthResult<String> {
+        if self.cur > 1 {
+            Ok(self.tokens[self.cur - 2].clone())
+        } else {
+            Err(ForthErr::Msg("No var name".to_string()))
+        }
     }
 }

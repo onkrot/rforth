@@ -1,8 +1,9 @@
 use crate::types::*;
+use std::collections::HashMap;
 use std::num::ParseIntError;
 
 #[derive(Eq, PartialEq)]
-enum ParserState{
+enum ParserState {
     Normal,
     WordName,
     WordBody,
@@ -12,38 +13,85 @@ pub fn tokenize(expr: &str) -> Vec<&str> {
     expr.split_whitespace().collect()
 }
 
-pub fn parse(tokens: &[&str]) -> ForthResult<(Vec<ForthExp>, Vec<(String, Vec<ForthExp>)>)> {
+pub fn parse(tokens: &[&str], env: &mut ForthEnv) -> ForthResult<Vec<ForthExp>> {
+    for token in tokens {
+        env.parser.tokens.push(token.to_string())
+    }
     let mut res: Vec<ForthExp> = vec![];
     let mut new_word: Vec<ForthExp> = vec![];
-    let mut name = "";
-    let mut new_words: Vec<(String, Vec<ForthExp>)> = vec![];
+    let mut name = "".to_string();
+    let mut new_words: HashMap<ForthOp, ForthFunc> = HashMap::new();
     let mut state = ParserState::Normal;
-    for token in tokens {
+    let mut variables: HashMap<String, i64> = HashMap::new();
+    while let Ok(token) = env.parser.next() {
         match state {
-            ParserState::Normal => {
-                match *token {
-                    ":" => {
-                        if state == ParserState::WordBody {
-                            return Err(ForthErr::Msg("Unexpected :".to_string()));
-                        }
-                        state = ParserState::WordName;
-                    },
-                    ";" => {
-                        if state == ParserState::Normal {
-                            return Err(ForthErr::Msg("Unexpected ;".to_string()));
-                        }
-                        state = ParserState::Normal;
-                        new_words.push((name.to_string(), new_word));
-                        new_word = vec![];
+            ParserState::Normal => match token.as_str() {
+                ":" => {
+                    if state == ParserState::WordBody {
+                        return Err(ForthErr::Msg("Unexpected :".to_string()));
                     }
-                    t => res.push(parse_atom(t)?)
+                    state = ParserState::WordName;
+                }
+                ";" => {
+                    return Err(ForthErr::Msg("Unexpected ;".to_string()));
+                }
+                "variable" => {
+                    let var = env.parser.next()?;
+                    variables.insert(var.clone(), 0);
+                    new_words.insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
+                }
+                "constant" => {
+                    let var = env.parser.get_cur();
+                    env.parser.next()?;
+                    new_words.insert(
+                        ForthOp::Constant(var.clone()),
+                        ForthFunc::ConstantDef(var.clone()),
+                    );
+                    res.push(ForthExp::Op(ForthOp::Constant(var.clone())));
+                    variables.insert(var, 0);
+                }
+                t => {
+                    let atom = parse_atom(t)?;
+                    if let ForthExp::Op(ForthOp::UserWord(var)) = atom {
+                        if env.words.contains_key(&ForthOp::Constant(var.clone())) {
+                            res.push(ForthExp::Op(ForthOp::Constant(var.clone())));
+                        } else if env.words.contains_key(&ForthOp::Variable(var.clone())) {
+                            res.push(ForthExp::Op(ForthOp::Variable(var.clone())));
+                        } else {
+                            res.push(ForthExp::Op(ForthOp::UserWord(var)))
+                        };
+                    } else {
+                        res.push(atom)
+                    }
+                }
+            },
+            ParserState::WordName => {
+                name = token;
+                state = ParserState::WordBody
+            }
+            ParserState::WordBody => {
+                if token.to_ascii_lowercase().as_str() == "variable" {
+                    let var = env.parser.next()?;
+                    variables.insert(var.clone(), 0);
+                    new_words.insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
+                } else if token == ";" {
+                    state = ParserState::Normal;
+                    new_words.insert(
+                        ForthOp::UserWord(name.to_string()),
+                        ForthFunc::User(new_word),
+                    );
+                    new_word = vec![];
+                } else {
+                    new_word.push(parse_atom(token.as_str())?)
                 }
             }
-            ParserState::WordName => name = token,
-            ParserState::WordBody => new_word.push(parse_atom(token)?),
         }
     }
-    Ok((res, new_words))
+    for new_word in new_words {
+        env.words.insert(new_word.0, new_word.1);
+    }
+    env.variables.extend(variables);
+    Ok(res)
 }
 
 fn parse_atom(token: &str) -> ForthResult<ForthExp> {
@@ -86,6 +134,8 @@ fn parse_atom(token: &str) -> ForthResult<ForthExp> {
                 "<=" => ForthOp::Le,
                 ">=" => ForthOp::Ge,
                 "<>" => ForthOp::Ne,
+                "@" => ForthOp::GetVar,
+                "!" => ForthOp::SetVar,
                 word => ForthOp::UserWord(word.to_string()),
             };
             ForthExp::Op(op)
