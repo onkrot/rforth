@@ -1,15 +1,16 @@
-use crate::types::*;
+use super::types::*;
+use super::ForthInterp;
 use std::collections::HashMap;
 
 macro_rules! restore_stack {
-    ($a: expr, $b: expr, $env: ident) => {
-        $env.push(ForthExp::Number($a));
-        $env.push(ForthExp::Number($b));
+    ($a: expr, $b: expr, $interp: ident) => {
+        $interp.push(ForthExp::Number($a));
+        $interp.push(ForthExp::Number($b));
     };
-    ($a: expr, $b: expr, $c:expr, $env: ident) => {
-        $env.push(ForthExp::Number($a));
-        $env.push(ForthExp::Number($b));
-        $env.push(ForthExp::Number($c));
+    ($a: expr, $b: expr, $c:expr, $interp: ident) => {
+        $interp.push(ForthExp::Number($a));
+        $interp.push(ForthExp::Number($b));
+        $interp.push(ForthExp::Number($c));
     };
 }
 
@@ -21,12 +22,12 @@ macro_rules! generic_op {
 
 macro_rules! n_ary_op {
     ($map: ident, $op: expr, $n: expr, $func: expr) => {
-        generic_op!($map, $op, |env: &mut ForthEnv| -> ForthResult<()> {
+        generic_op!($map, $op, |interp: &mut ForthInterp| -> ForthResult<()> {
             let mut x: [i64; $n] = [0; $n];
             for i in 0..$n {
-                x[i] = env.pop_num()?;
+                x[i] = interp.pop_num()?;
             }
-            env.push(ForthExp::Number($func(x)));
+            interp.push(ForthExp::Number($func(x)));
             return Ok(());
         });
     };
@@ -34,24 +35,24 @@ macro_rules! n_ary_op {
 
 macro_rules! checked_div {
     ($map: ident, $op: expr, $n: expr, $func: expr) => {
-        generic_op!($map, $op, |env: &mut ForthEnv| -> ForthResult<()> {
+        generic_op!($map, $op, |interp: &mut ForthInterp| -> ForthResult<()> {
             let mut x: [i64; $n] = [0; $n];
             for i in 0..$n {
-                x[i] = env.pop_num()?;
+                x[i] = interp.pop_num()?;
             }
             if x[0] == 0 {
                 for i in (0..$n).rev() {
-                    env.push(ForthExp::Number(x[i]));
+                    interp.push(ForthExp::Number(x[i]));
                 }
                 return Err(ForthErr::Msg("Division by zero".to_string()));
             }
-            env.push(ForthExp::Number($func(x)));
+            interp.push(ForthExp::Number($func(x)));
             return Ok(());
         });
     };
 }
 
-pub fn default_env() -> ForthEnv {
+pub fn add_builtins(interp: &mut ForthInterp) {
     let mut words: HashMap<ForthOp, ForthFunc> = HashMap::new();
 
     n_ary_op!(words, ForthOp::Add, 2, |x: [i64; 2]| x[1]
@@ -65,15 +66,15 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::DivMod,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let b = env.pop_num()?;
-            let a = env.pop_num()?;
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let b = interp.pop_num()?;
+            let a = interp.pop_num()?;
             if b == 0 {
-                restore_stack!(a, b, env);
+                restore_stack!(a, b, interp);
                 return Err(ForthErr::Msg("Division by zero".to_string()));
             }
-            env.push(ForthExp::Number(a % b));
-            env.push(ForthExp::Number(a / b));
+            interp.push(ForthExp::Number(a % b));
+            interp.push(ForthExp::Number(a / b));
             return Ok(());
         }
     );
@@ -83,16 +84,16 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::FMDM,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let c = env.pop_num()?;
-            let b = env.pop_num()?;
-            let a = env.pop_num()?;
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let c = interp.pop_num()?;
+            let b = interp.pop_num()?;
+            let a = interp.pop_num()?;
             if c == 0 {
-                restore_stack!(a, b, c, env);
+                restore_stack!(a, b, c, interp);
                 return Err(ForthErr::Msg("Division by zero".to_string()));
             }
-            env.push(ForthExp::Number((a.wrapping_mul(b)) % c));
-            env.push(ForthExp::Number((a.wrapping_mul(b)) / c));
+            interp.push(ForthExp::Number((a.wrapping_mul(b)) % c));
+            interp.push(ForthExp::Number((a.wrapping_mul(b)) / c));
             return Ok(());
         }
     );
@@ -160,27 +161,27 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::GetVar,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let name = env.parser.get_var_name()?;
-            let a = env
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let name = interp.parser.get_var_name()?;
+            let a = interp
                 .variables
                 .get(&name)
                 .ok_or(ForthErr::Msg(format!("Undefined variable")))?
                 .clone();
-            env.push(ForthExp::Number(a));
+            interp.push(ForthExp::Number(a));
             return Ok(());
         }
     );
     generic_op!(
         words,
         ForthOp::SetVar,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let name = env.parser.get_var_name()?;
-            if env.words.contains_key(&ForthOp::Constant(name.clone())) {
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let name = interp.parser.get_var_name()?;
+            if interp.words.contains_key(&ForthOp::Constant(name.clone())) {
                 return Err(ForthErr::Msg("Cannot reset constant".to_string()));
-            } else if env.words.contains_key(&ForthOp::Variable(name.clone())) {
-                let a = env.pop_num()?;
-                env.variables.insert(name, a);
+            } else if interp.words.contains_key(&ForthOp::Variable(name.clone())) {
+                let a = interp.pop_num()?;
+                interp.variables.insert(name, a);
                 return Ok(());
             } else {
                 return Err(ForthErr::Msg("Undefined variable".to_string()));
@@ -190,10 +191,10 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Dup,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let a = env.pop_num()?;
-            env.push(ForthExp::Number(a));
-            env.push(ForthExp::Number(a));
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let a = interp.pop_num()?;
+            interp.push(ForthExp::Number(a));
+            interp.push(ForthExp::Number(a));
             return Ok(());
         }
     );
@@ -201,8 +202,8 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Drop,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            env.pop_num()?;
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            interp.pop_num()?;
             return Ok(());
         }
     );
@@ -210,8 +211,8 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Print,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let a = env.pop_num()?;
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let a = interp.pop_num()?;
             println!("{} ", a);
             return Ok(());
         }
@@ -220,12 +221,12 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Over,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let b = env.pop_num()?;
-            let a = env.pop_num()?;
-            env.push(ForthExp::Number(a));
-            env.push(ForthExp::Number(b));
-            env.push(ForthExp::Number(a));
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let b = interp.pop_num()?;
+            let a = interp.pop_num()?;
+            interp.push(ForthExp::Number(a));
+            interp.push(ForthExp::Number(b));
+            interp.push(ForthExp::Number(a));
             return Ok(());
         }
     );
@@ -233,13 +234,13 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Rot,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let c = env.pop_num()?;
-            let b = env.pop_num()?;
-            let a = env.pop_num()?;
-            env.push(ForthExp::Number(b));
-            env.push(ForthExp::Number(c));
-            env.push(ForthExp::Number(a));
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let c = interp.pop_num()?;
+            let b = interp.pop_num()?;
+            let a = interp.pop_num()?;
+            interp.push(ForthExp::Number(b));
+            interp.push(ForthExp::Number(c));
+            interp.push(ForthExp::Number(a));
             return Ok(());
         }
     );
@@ -247,11 +248,11 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Swap,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let b = env.pop_num()?;
-            let a = env.pop_num()?;
-            env.push(ForthExp::Number(b));
-            env.push(ForthExp::Number(a));
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let b = interp.pop_num()?;
+            let a = interp.pop_num()?;
+            interp.push(ForthExp::Number(b));
+            interp.push(ForthExp::Number(a));
             return Ok(());
         }
     );
@@ -259,13 +260,13 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Pick,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let n = env.pop_num()?;
-            if n < env.stack.len() as i64 {
-                let t: usize = env.stack.len() - (n + 1) as usize;
-                env.push(env.stack[t].clone());
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let n = interp.pop_num()?;
+            if n < interp.stack.len() as i64 {
+                let t: usize = interp.stack.len() - (n + 1) as usize;
+                interp.push(interp.stack[t].clone());
             } else {
-                env.push(ForthExp::Number(n));
+                interp.push(ForthExp::Number(n));
                 return Err(ForthErr::Msg("Not enough values".to_string()));
             }
             Ok(())
@@ -275,27 +276,18 @@ pub fn default_env() -> ForthEnv {
     generic_op!(
         words,
         ForthOp::Roll,
-        |env: &mut ForthEnv| -> ForthResult<()> {
-            let n = env.pop_num()?;
-            if n < env.stack.len() as i64 {
-                let t: usize = env.stack.len() - (n + 1) as usize;
-                let val = env.stack.remove(t);
-                env.push(val);
+        |interp: &mut ForthInterp| -> ForthResult<()> {
+            let n = interp.pop_num()?;
+            if n < interp.stack.len() as i64 {
+                let t: usize = interp.stack.len() - (n + 1) as usize;
+                let val = interp.stack.remove(t);
+                interp.push(val);
             } else {
-                env.push(ForthExp::Number(n));
+                interp.push(ForthExp::Number(n));
                 return Err(ForthErr::Msg("Not enough values".to_string()));
             }
             Ok(())
         }
     );
-
-    ForthEnv {
-        words,
-        stack: vec![],
-        variables: HashMap::new(),
-        parser: ForthParser {
-            tokens: vec![],
-            cur: 0,
-        },
-    }
+    interp.words.extend(words);
 }
