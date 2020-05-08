@@ -95,6 +95,11 @@ impl ForthParser {
                             .push(ForthExp::Op(ForthOp::Constant(var.clone())));
                         res.variables.insert(var, 0);
                     }
+                    "if" => {
+                        let expr = self.parse_if()?;
+                        res.program.push(ForthExp::Op(ForthOp::IfThenElse(self.cur)));
+                        res.new_words.insert(ForthOp::IfThenElse(self.cur), ForthFunc::IfThenElse(expr));
+                    }
                     t => res.program.push(parse_word(t)?),
                 },
                 ParserState::WordName => {
@@ -107,6 +112,10 @@ impl ForthParser {
                         res.variables.insert(var.clone(), 0);
                         res.new_words
                             .insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
+                    } else if token == "if" {
+                        let expr = self.parse_if()?;
+                        self.new_word.push(ForthExp::Op(ForthOp::IfThenElse(self.cur)));
+                        res.new_words.insert(ForthOp::IfThenElse(self.cur), ForthFunc::IfThenElse(expr));
                     } else if token == ";" {
                         self.state = ParserState::Normal;
                         res.new_words.insert(
@@ -122,6 +131,39 @@ impl ForthParser {
             }
         }
         Ok(res)
+    }
+
+    fn parse_simple(&mut self, tokens: Vec<String>) -> ForthResult<Vec<ForthExp>> {
+        let mut res = vec![];
+        for token in tokens {
+            res.push(parse_word(token.as_str())?)
+        }
+        Ok(res)
+    }
+
+    fn parse_if(&mut self) -> ForthResult<(Vec<ForthExp>, Option<Vec<ForthExp>>)> {
+        let mut then: Vec<String> = vec![];
+        let mut r#else: Vec<String> = vec![];
+        let mut else_found = false;
+        while let Ok(token) = self.next() {
+            match token.as_str() {
+                "then" => break,
+                "else" => else_found = true,
+                _ => if else_found {
+                    r#else.push(token)
+                } else {
+                    then.push(token);
+                }
+            }
+        }
+        let then_parsed = self.parse_simple(then)?;
+        if else_found {
+            let else_parsed = self.parse_simple(r#else)?;
+            Ok((then_parsed, Some(else_parsed)))
+
+        } else {
+            Ok((then_parsed, None))
+        }
     }
 }
 

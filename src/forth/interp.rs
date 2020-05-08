@@ -73,6 +73,18 @@ impl ForthInterp {
                         }
                         Err(_) => return Err(ForthErr::Msg("No constant value".to_string())),
                     },
+                    ForthFunc::IfThenElse((Then, Else)) => {
+                        let cond = self.pop_num()?;
+                        if cond != 0 {
+                            for e in Then {
+                                self.eval(e)?;
+                            }
+                        } else if let Some(v) = Else {
+                            for e in v {
+                                self.eval(e)?;
+                            }
+                        }
+                    }
                 }
             }
             ForthExp::Number(a) => self.push(ForthExp::Number(a)),

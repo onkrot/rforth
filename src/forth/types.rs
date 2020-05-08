@@ -14,6 +14,7 @@ pub enum ForthFunc {
     User(Vec<ForthExp>),
     Variable,
     ConstantDef(String),
+    IfThenElse((Vec<ForthExp>, Option<Vec<ForthExp>>))
 }
 
 pub enum ForthErr {
@@ -63,6 +64,7 @@ pub enum ForthOp {
     GetVar,
     SetVar,
     UserWord(String),
+    IfThenElse(usize)
 }
 
 impl fmt::Display for ForthExp {
