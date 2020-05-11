@@ -194,11 +194,7 @@ impl ForthInterp {
             ForthOp::Lt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] < 0 { 1 } else { 0 }),
             ForthOp::Eq0 => n_ary_op!(1, |x: [i64; 1]| if x[0] == 0 { 1 } else { 0 }),
             ForthOp::Gt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] > 0 { 1 } else { 0 }),
-            ForthOp::Variable(name) => self
-                .words
-                .get(&ForthOp::Variable(name.clone()))
-                .ok_or(ForthErr::Msg(format!("Not implemented {}", name)))?
-                .clone(),
+            ForthOp::Variable(_) => ForthFunc::Variable,
             ForthOp::GetVar(num) => self
                 .words
                 .get(&ForthOp::GetVar(num))

@@ -78,63 +78,17 @@ impl ForthParser {
                     ";" => {
                         return Err(ForthErr::Msg("Unexpected ;".to_string()));
                     }
-                    "variable" => {
-                        let var = self.next()?;
-                        res.variables.insert(var.clone(), 0);
-                        res.new_words
-                            .insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
+                    t => {
+                        let expr = self.parse_token(t, &mut res)?;
+                        res.program.push(expr);
                     }
-                    "constant" => {
-                        let var = self.get_cur();
-                        self.next()?;
-                        res.new_words.insert(
-                            ForthOp::UserWord(var.clone()),
-                            ForthFunc::ConstantDef(var.clone()),
-                        );
-                        res.program
-                            .push(ForthExp::Op(ForthOp::UserWord(var.clone())));
-                        res.variables.insert(var, 0);
-                    }
-                    "@" => {
-                        res.new_words.insert(
-                            ForthOp::GetVar(self.cur),
-                            ForthFunc::GetVar(self.get_var_name()?),
-                        );
-                        res.program.push(ForthExp::Op(ForthOp::GetVar(self.cur)));
-                    }
-                    "!" => {
-                        res.new_words.insert(
-                            ForthOp::SetVar(self.cur),
-                            ForthFunc::SetVar(self.get_var_name()?),
-                        );
-                        res.program.push(ForthExp::Op(ForthOp::SetVar(self.cur)));
-                    }
-                    "if" => {
-                        let expr = self.parse_if()?;
-                        res.program
-                            .push(ForthExp::Op(ForthOp::IfThenElse(self.cur)));
-                        res.new_words
-                            .insert(ForthOp::IfThenElse(self.cur), ForthFunc::IfThenElse(expr));
-                    }
-                    t => res.program.push(parse_word(t)?),
                 },
                 ParserState::WordName => {
                     self.word_name = token;
                     self.state = ParserState::WordBody
                 }
                 ParserState::WordBody => {
-                    if token.to_ascii_lowercase().as_str() == "variable" {
-                        let var = self.next()?;
-                        res.variables.insert(var.clone(), 0);
-                        res.new_words
-                            .insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
-                    } else if token == "if" {
-                        let expr = self.parse_if()?;
-                        self.new_word
-                            .push(ForthExp::Op(ForthOp::IfThenElse(self.cur)));
-                        res.new_words
-                            .insert(ForthOp::IfThenElse(self.cur), ForthFunc::IfThenElse(expr));
-                    } else if token == ";" {
+                    if token == ";" {
                         self.state = ParserState::Normal;
                         res.new_words.insert(
                             ForthOp::UserWord(self.word_name.clone()),
@@ -142,25 +96,57 @@ impl ForthParser {
                         );
                         self.word_name.clear();
                         self.new_word.clear();
-                    } else if token == "@" {
-                        res.new_words.insert(
-                            ForthOp::GetVar(self.cur),
-                            ForthFunc::GetVar(self.get_var_name()?),
-                        );
-                        self.new_word.push(ForthExp::Op(ForthOp::GetVar(self.cur)));
-                    } else if token == "!" {
-                        res.new_words.insert(
-                            ForthOp::SetVar(self.cur),
-                            ForthFunc::SetVar(self.get_var_name()?),
-                        );
-                        self.new_word.push(ForthExp::Op(ForthOp::SetVar(self.cur)));
                     } else {
-                        self.new_word.push(parse_word(token.as_str())?)
+                        let expr = self.parse_token(token.as_str(), &mut res)?;
+                        self.new_word.push(expr);
                     }
                 }
             }
         }
         Ok(res)
+    }
+
+    fn parse_token(&mut self, token: &str, res: &mut ParserResult) -> ForthResult<ForthExp> {
+        match token {
+            "variable" => {
+                let var = self.next()?;
+                res.variables.insert(var.clone(), 0);
+                res.new_words
+                    .insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
+                Ok(ForthExp::Op(ForthOp::Variable(var)))
+            }
+            "constant" => {
+                let var = self.get_cur();
+                self.next()?;
+                res.new_words.insert(
+                    ForthOp::UserWord(var.clone()),
+                    ForthFunc::ConstantDef(var.clone()),
+                );
+                res.variables.insert(var.clone(), 0);
+                Ok(ForthExp::Op(ForthOp::UserWord(var)))
+            }
+            "@" => {
+                res.new_words.insert(
+                    ForthOp::GetVar(self.cur),
+                    ForthFunc::GetVar(self.get_var_name()?),
+                );
+                Ok(ForthExp::Op(ForthOp::GetVar(self.cur)))
+            }
+            "!" => {
+                res.new_words.insert(
+                    ForthOp::SetVar(self.cur),
+                    ForthFunc::SetVar(self.get_var_name()?),
+                );
+                Ok(ForthExp::Op(ForthOp::SetVar(self.cur)))
+            }
+            "if" => {
+                let expr = self.parse_if()?;
+                res.new_words
+                    .insert(ForthOp::IfThenElse(self.cur), ForthFunc::IfThenElse(expr));
+                Ok(ForthExp::Op(ForthOp::IfThenElse(self.cur)))
+            }
+            t => parse_word(t),
+        }
     }
 
     fn parse_simple(&mut self, tokens: Vec<String>) -> ForthResult<Vec<ForthExp>> {
