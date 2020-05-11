@@ -242,6 +242,9 @@ fn parse_word(token: &str) -> ForthResult<ForthExp> {
                 "<=" => ForthOp::Le,
                 ">=" => ForthOp::Ge,
                 "<>" => ForthOp::Ne,
+                "0<" => ForthOp::Lt0,
+                "0=" => ForthOp::Eq0,
+                "0>" => ForthOp::Gt0,
                 word => ForthOp::UserWord(word.to_string()),
             };
             ForthExp::Op(op)

@@ -191,6 +191,9 @@ impl ForthInterp {
             ForthOp::Le => n_ary_op!(2, |x: [i64; 2]| if x[1] <= x[0] { 1 } else { 0 }),
             ForthOp::Ge => n_ary_op!(2, |x: [i64; 2]| if x[1] >= x[0] { 1 } else { 0 }),
             ForthOp::Ne => n_ary_op!(2, |x: [i64; 2]| if x[1] != x[0] { 1 } else { 0 }),
+            ForthOp::Lt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] < 0 { 1 } else { 0 }),
+            ForthOp::Eq0 => n_ary_op!(1, |x: [i64; 1]| if x[0] == 0 { 1 } else { 0 }),
+            ForthOp::Gt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] > 0 { 1 } else { 0 }),
             ForthOp::Variable(name) => self
                 .words
                 .get(&ForthOp::Variable(name.clone()))
@@ -216,7 +219,11 @@ impl ForthInterp {
                         .clone()
                 }
             }
-            ForthOp::IfThenElse(_) => ForthFunc::Variable,
+            ForthOp::IfThenElse(num) => self
+                .words
+                .get(&ForthOp::IfThenElse(num))
+                .ok_or(ForthErr::Msg(format!("No body for if at {}", num)))?
+                .clone(),
         };
 
         Ok(func)
@@ -232,7 +239,7 @@ impl ForthInterp {
                             self.eval(e)?;
                         }
                     }
-                    ForthFunc::Variable => {},
+                    ForthFunc::Variable => {}
                     ForthFunc::ConstantDef(name) => match self.pop_num() {
                         Ok(num) => {
                             self.words.insert(
@@ -242,25 +249,26 @@ impl ForthInterp {
                         }
                         Err(_) => return Err(ForthErr::Msg("No constant value".to_string())),
                     },
-                    ForthFunc::IfThenElse((Then, Else)) => {
+                    ForthFunc::IfThenElse((then, r#else)) => {
                         let cond = self.pop_num()?;
                         if cond != 0 {
-                            for e in Then {
+                            for e in then {
                                 self.eval(e)?;
                             }
-                        } else if let Some(v) = Else {
+                        } else if let Some(v) = r#else {
                             for e in v {
                                 self.eval(e)?;
                             }
                         }
-                    },
+                    }
                     ForthFunc::GetVar(name) => {
                         let num = self
                             .variables
                             .get(&name)
-                            .ok_or(ForthErr::Msg(format!("Not defined variable at {}", name)))?.clone();
+                            .ok_or(ForthErr::Msg(format!("Not defined variable at {}", name)))?
+                            .clone();
                         self.push(ForthExp::Number(num));
-                    },
+                    }
                     ForthFunc::SetVar(name) => {
                         let num = self.pop_num()?;
                         self.variables.insert(name, num);
