@@ -1,9 +1,10 @@
 use super::parser::ForthParser;
 use super::types::*;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 
-const TRUE:i64 = -1;
-const FALSE:i64 = 0;
+const TRUE: i64 = -1;
+const FALSE: i64 = 0;
 
 macro_rules! n_ary_op {
     ($n: expr, $func: expr) => {
@@ -124,6 +125,14 @@ impl ForthInterp {
                 interp.push(ForthExp::Number(a));
                 return Ok(());
             }),
+            ForthOp::IfDup => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
+                let a = interp.pop_num()?;
+                interp.push(ForthExp::Number(a));
+                if a != 0 {
+                    interp.push(ForthExp::Number(a));
+                }
+                return Ok(());
+            }),
             ForthOp::Drop => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
                 interp.pop_num()?;
                 return Ok(());
@@ -218,6 +227,10 @@ impl ForthInterp {
                 println!("{} ", a);
                 return Ok(());
             }),
+            ForthOp::Depth => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
+                interp.push(ForthExp::Number(interp.stack.len() as i64));
+                return Ok(());
+            }),
             ForthOp::And => n_ary_op!(2, |x: [i64; 2]| x[0] & x[1]),
             ForthOp::Or => n_ary_op!(2, |x: [i64; 2]| x[0] | x[1]),
             ForthOp::Xor => n_ary_op!(2, |x: [i64; 2]| x[0] ^ x[1]),
@@ -232,6 +245,13 @@ impl ForthInterp {
             ForthOp::Lt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] < 0 { TRUE } else { FALSE }),
             ForthOp::Eq0 => n_ary_op!(1, |x: [i64; 1]| if x[0] == 0 { TRUE } else { FALSE }),
             ForthOp::Gt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] > 0 { TRUE } else { FALSE }),
+            ForthOp::Ne0 => n_ary_op!(1, |x: [i64; 1]| if x[0] != 0 { TRUE } else { FALSE }),
+            ForthOp::True => n_ary_op!(0, |_: [i64; 0]| TRUE),
+            ForthOp::False => n_ary_op!(0, |_: [i64; 0]| FALSE),
+            ForthOp::Lshift => n_ary_op!(2, |x: [i64; 2]| x[1] << x[0]),
+            ForthOp::Rshift => n_ary_op!(2, |x: [i64; 2]| x[1] >> x[0]),
+            ForthOp::Max => n_ary_op!(2, |x: [i64; 2]| max(x[0], x[1])),
+            ForthOp::Min => n_ary_op!(2, |x: [i64; 2]| min(x[0], x[1])),
             ForthOp::Variable(_) => ForthFunc::Variable,
             ForthOp::GetVar(num) => self
                 .words
