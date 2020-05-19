@@ -149,6 +149,44 @@ impl ForthInterp {
                 interp.push(ForthExp::Number(a));
                 return Ok(());
             }),
+            ForthOp::Dup2 => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
+                let b = interp.pop_num()?;
+                let a = interp.pop_num()?;
+                interp.push(ForthExp::Number(a));
+                interp.push(ForthExp::Number(b));
+                interp.push(ForthExp::Number(a));
+                interp.push(ForthExp::Number(b));
+                return Ok(());
+            }),
+            ForthOp::Drop2 => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
+                interp.pop_num()?;
+                interp.pop_num()?;
+                return Ok(());
+            }),
+            ForthOp::Over2 => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
+                let d = interp.pop_num()?;
+                let c = interp.pop_num()?;
+                let b = interp.pop_num()?;
+                let a = interp.pop_num()?;
+                interp.push(ForthExp::Number(a));
+                interp.push(ForthExp::Number(b));
+                interp.push(ForthExp::Number(c));
+                interp.push(ForthExp::Number(d));
+                interp.push(ForthExp::Number(a));
+                interp.push(ForthExp::Number(b));
+                return Ok(());
+            }),
+            ForthOp::Swap2 => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
+                let d = interp.pop_num()?;
+                let c = interp.pop_num()?;
+                let b = interp.pop_num()?;
+                let a = interp.pop_num()?;
+                interp.push(ForthExp::Number(c));
+                interp.push(ForthExp::Number(d));
+                interp.push(ForthExp::Number(a));
+                interp.push(ForthExp::Number(b));
+                return Ok(());
+            }),
             ForthOp::Pick => ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
                 let n = interp.pop_num()?;
                 if n < interp.stack.len() as i64 {
