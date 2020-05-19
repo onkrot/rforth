@@ -292,6 +292,7 @@ fn parse_word(token: &str) -> ForthResult<ForthExp> {
                 "0<" => ForthOp::Lt0,
                 "0=" => ForthOp::Eq0,
                 "0>" => ForthOp::Gt0,
+                "invert" => ForthOp::Invert,
                 "2dup" => ForthOp::Dup2,
                 "2drop" => ForthOp::Drop2,
                 "2swap" => ForthOp::Swap2,

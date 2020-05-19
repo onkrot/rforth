@@ -66,6 +66,7 @@ pub enum ForthOp {
     Lt0,
     Eq0,
     Gt0,
+    Invert,
     Dup2,
     Swap2,
     Drop2,

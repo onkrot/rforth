@@ -2,6 +2,9 @@ use super::parser::ForthParser;
 use super::types::*;
 use std::collections::HashMap;
 
+const TRUE:i64 = -1;
+const FALSE:i64 = 0;
+
 macro_rules! n_ary_op {
     ($n: expr, $func: expr) => {
         ForthFunc::Native(|interp: &mut ForthInterp| -> ForthResult<()> {
@@ -215,23 +218,20 @@ impl ForthInterp {
                 println!("{} ", a);
                 return Ok(());
             }),
-            ForthOp::And => n_ary_op!(2, |x: [i64; 2]| if x[0] != 0 && x[1] != 0 { 1 } else { 0 }),
-            ForthOp::Or => n_ary_op!(2, |x: [i64; 2]| if x[0] != 0 || x[1] != 0 { 1 } else { 0 }),
-            ForthOp::Xor => n_ary_op!(2, |x: [i64; 2]| if (x[0] != 0) != (x[1] != 0) {
-                1
-            } else {
-                0
-            }),
-            ForthOp::Not => n_ary_op!(1, |x: [i64; 1]| if x[0] != 0 { 0 } else { 1 }),
-            ForthOp::Lt => n_ary_op!(2, |x: [i64; 2]| if x[1] < x[0] { 1 } else { 0 }),
-            ForthOp::Gt => n_ary_op!(2, |x: [i64; 2]| if x[1] > x[0] { 1 } else { 0 }),
-            ForthOp::Eq => n_ary_op!(2, |x: [i64; 2]| if x[1] == x[0] { 1 } else { 0 }),
-            ForthOp::Le => n_ary_op!(2, |x: [i64; 2]| if x[1] <= x[0] { 1 } else { 0 }),
-            ForthOp::Ge => n_ary_op!(2, |x: [i64; 2]| if x[1] >= x[0] { 1 } else { 0 }),
-            ForthOp::Ne => n_ary_op!(2, |x: [i64; 2]| if x[1] != x[0] { 1 } else { 0 }),
-            ForthOp::Lt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] < 0 { 1 } else { 0 }),
-            ForthOp::Eq0 => n_ary_op!(1, |x: [i64; 1]| if x[0] == 0 { 1 } else { 0 }),
-            ForthOp::Gt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] > 0 { 1 } else { 0 }),
+            ForthOp::And => n_ary_op!(2, |x: [i64; 2]| x[0] & x[1]),
+            ForthOp::Or => n_ary_op!(2, |x: [i64; 2]| x[0] | x[1]),
+            ForthOp::Xor => n_ary_op!(2, |x: [i64; 2]| x[0] ^ x[1]),
+            ForthOp::Not => n_ary_op!(1, |x: [i64; 1]| !x[0]),
+            ForthOp::Invert => n_ary_op!(1, |x: [i64; 1]| if x[0] != FALSE { FALSE } else { TRUE }),
+            ForthOp::Lt => n_ary_op!(2, |x: [i64; 2]| if x[1] < x[0] { TRUE } else { FALSE }),
+            ForthOp::Gt => n_ary_op!(2, |x: [i64; 2]| if x[1] > x[0] { TRUE } else { FALSE }),
+            ForthOp::Eq => n_ary_op!(2, |x: [i64; 2]| if x[1] == x[0] { TRUE } else { FALSE }),
+            ForthOp::Le => n_ary_op!(2, |x: [i64; 2]| if x[1] <= x[0] { TRUE } else { FALSE }),
+            ForthOp::Ge => n_ary_op!(2, |x: [i64; 2]| if x[1] >= x[0] { TRUE } else { FALSE }),
+            ForthOp::Ne => n_ary_op!(2, |x: [i64; 2]| if x[1] != x[0] { TRUE } else { FALSE }),
+            ForthOp::Lt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] < 0 { TRUE } else { FALSE }),
+            ForthOp::Eq0 => n_ary_op!(1, |x: [i64; 1]| if x[0] == 0 { TRUE } else { FALSE }),
+            ForthOp::Gt0 => n_ary_op!(1, |x: [i64; 1]| if x[0] > 0 { TRUE } else { FALSE }),
             ForthOp::Variable(_) => ForthFunc::Variable,
             ForthOp::GetVar(num) => self
                 .words
