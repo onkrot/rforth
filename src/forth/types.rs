@@ -17,6 +17,8 @@ pub enum ForthFunc {
     GetVar(String),
     SetVar(String),
     IfThenElse((Vec<ForthExp>, Option<Vec<ForthExp>>)),
+    BeginUntil(Vec<ForthExp>),
+    BeginWhile(Vec<ForthExp>, Vec<ForthExp>),
 }
 
 pub enum ForthErr {
@@ -69,6 +71,8 @@ pub enum ForthOp {
     SetVar(usize),
     UserWord(String),
     IfThenElse(usize),
+    BeginUntil(usize),
+    BeginWhile(usize),
 }
 
 impl fmt::Display for ForthExp {

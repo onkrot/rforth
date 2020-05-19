@@ -1,6 +1,7 @@
 use super::types::*;
 use std::collections::HashMap;
 use std::num::ParseIntError;
+use std::slice::Iter;
 
 #[derive(Eq, PartialEq, Clone)]
 enum ParserState {
@@ -34,152 +35,212 @@ impl ForthParser {
             new_word: vec![],
         }
     }
-    fn next(&mut self) -> ForthResult<String> {
-        if self.cur < self.tokens.len() {
-            self.cur += 1;
-            Ok(self.tokens[self.cur - 1].clone())
-        } else {
-            Err(ForthErr::Msg("No next token".to_string()))
-        }
-    }
-    fn get_cur(&self) -> String {
-        self.tokens[self.cur].clone()
-    }
-    pub fn get_var_name(&self) -> ForthResult<String> {
-        if self.cur > 1 {
-            Ok(self.tokens[self.cur - 2].clone())
-        } else {
-            Err(ForthErr::Msg("No var name".to_string()))
-        }
-    }
     pub fn parse_str(&mut self, expr: &str) -> ForthResult<ParserResult> {
-        let parsed_exp = self.parse(&tokenize(expr))?;
+        let lower_expr = expr.to_ascii_lowercase();
+        let parsed_exp = self.parse(&tokenize(&lower_expr))?;
 
         Ok(parsed_exp)
     }
     fn parse(&mut self, tokens: &[&str]) -> ForthResult<ParserResult> {
-        for token in tokens {
-            self.tokens.push(token.to_string())
-        }
         let mut res = ParserResult {
             program: vec![],
             new_words: HashMap::new(),
             variables: HashMap::new(),
         };
-        while let Ok(token) = self.next() {
+        let mut normal_tokens = vec![];
+        let mut word_tokens = vec![];
+        let mut iter = tokens.iter();
+        while let Some(token) = iter.next() {
             match self.state {
-                ParserState::Normal => match token.as_str() {
+                ParserState::Normal => match *token {
                     ":" => {
-                        if self.state == ParserState::WordBody {
-                            return Err(ForthErr::Msg("Unexpected :".to_string()));
-                        }
+                        let mut expr = self.parse_simple(normal_tokens, &mut res)?;
+                        normal_tokens = vec![];
+                        res.program.append(expr.as_mut());
                         self.state = ParserState::WordName;
                     }
                     ";" => {
                         return Err(ForthErr::Msg("Unexpected ;".to_string()));
                     }
                     t => {
-                        let expr = self.parse_token(t, &mut res)?;
-                        res.program.push(expr);
+                        normal_tokens.push(t.to_string());
                     }
                 },
                 ParserState::WordName => {
-                    self.word_name = token;
+                    self.word_name = token.to_string();
                     self.state = ParserState::WordBody
                 }
                 ParserState::WordBody => {
-                    if token == ";" {
+                    if *token == ";" {
                         self.state = ParserState::Normal;
+                        let expr = self.parse_simple(word_tokens, &mut res)?;
+                        word_tokens = vec![];
                         res.new_words.insert(
                             ForthOp::UserWord(self.word_name.clone()),
-                            ForthFunc::User(self.new_word.clone()),
+                            ForthFunc::User(expr),
                         );
-                        self.word_name.clear();
                         self.new_word.clear();
+                    } else if *token == ":" {
+                        return Err(ForthErr::Msg("Unexpected :".to_string()));
                     } else {
-                        let expr = self.parse_token(token.as_str(), &mut res)?;
-                        self.new_word.push(expr);
+                        word_tokens.push(token.to_string());
                     }
                 }
             }
         }
+        let mut expr = self.parse_simple(normal_tokens, &mut res)?;
+        res.program.append(expr.as_mut());
         Ok(res)
     }
 
-    fn parse_token(&mut self, token: &str, res: &mut ParserResult) -> ForthResult<ForthExp> {
-        match token {
-            "variable" => {
-                let var = self.next()?;
-                res.variables.insert(var.clone(), 0);
-                res.new_words
-                    .insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
-                Ok(ForthExp::Op(ForthOp::Variable(var)))
-            }
-            "constant" => {
-                let var = self.get_cur();
-                self.next()?;
-                res.new_words.insert(
-                    ForthOp::UserWord(var.clone()),
-                    ForthFunc::ConstantDef(var.clone()),
-                );
-                res.variables.insert(var.clone(), 0);
-                Ok(ForthExp::Op(ForthOp::UserWord(var)))
-            }
-            "@" => {
-                res.new_words.insert(
-                    ForthOp::GetVar(self.cur),
-                    ForthFunc::GetVar(self.get_var_name()?),
-                );
-                Ok(ForthExp::Op(ForthOp::GetVar(self.cur)))
-            }
-            "!" => {
-                res.new_words.insert(
-                    ForthOp::SetVar(self.cur),
-                    ForthFunc::SetVar(self.get_var_name()?),
-                );
-                Ok(ForthExp::Op(ForthOp::SetVar(self.cur)))
-            }
-            "if" => {
-                let expr = self.parse_if()?;
-                res.new_words
-                    .insert(ForthOp::IfThenElse(self.cur), ForthFunc::IfThenElse(expr));
-                Ok(ForthExp::Op(ForthOp::IfThenElse(self.cur)))
-            }
-            t => parse_word(t),
+    fn parse_simple(
+        &mut self,
+        tokens: Vec<String>,
+        res: &mut ParserResult,
+    ) -> ForthResult<Vec<ForthExp>> {
+        let mut parsed_tokens = vec![];
+        let mut prev_token = "";
+        let mut iter = tokens.iter();
+        while let Some(token) = iter.next() {
+            let parsed_token = match token.as_str() {
+                "variable" => {
+                    let var = iter.next().ok_or(ForthErr::Msg("no name".to_string()))?;
+                    res.variables.insert(var.clone(), 0);
+                    res.new_words
+                        .insert(ForthOp::Variable(var.clone()), ForthFunc::Variable);
+                    Ok(ForthExp::Op(ForthOp::Variable(var.clone())))
+                }
+                "constant" => {
+                    let var = iter
+                        .next()
+                        .ok_or(ForthErr::Msg("no name".to_string()))?
+                        .clone();
+                    res.new_words.insert(
+                        ForthOp::UserWord(var.clone()),
+                        ForthFunc::ConstantDef(var.clone()),
+                    );
+                    Ok(ForthExp::Op(ForthOp::UserWord(var.clone())))
+                }
+                "@" => {
+                    let var = prev_token;
+                    res.new_words.insert(
+                        ForthOp::GetVar(self.cur),
+                        ForthFunc::GetVar(var.to_string()),
+                    );
+                    Ok(ForthExp::Op(ForthOp::GetVar(self.cur)))
+                }
+                "!" => {
+                    let var = prev_token;
+                    res.new_words.insert(
+                        ForthOp::SetVar(self.cur),
+                        ForthFunc::SetVar(var.to_string()),
+                    );
+                    Ok(ForthExp::Op(ForthOp::SetVar(self.cur)))
+                }
+                "if" => {
+                    let expr = self.parse_if(&mut iter, res)?;
+                    res.new_words
+                        .insert(ForthOp::IfThenElse(self.cur), ForthFunc::IfThenElse(expr));
+                    Ok(ForthExp::Op(ForthOp::IfThenElse(self.cur)))
+                }
+                "begin" => {
+                    let (body1, body2) = self.parse_cycle(&mut iter, res)?;
+                    match body2 {
+                        None => {
+                            res.new_words.insert(
+                                ForthOp::BeginUntil(self.cur),
+                                ForthFunc::BeginUntil(body1),
+                            );
+                            Ok(ForthExp::Op(ForthOp::BeginUntil(self.cur)))
+                        }
+                        Some(body) => {
+                            res.new_words.insert(
+                                ForthOp::BeginWhile(self.cur),
+                                ForthFunc::BeginWhile(body1, body),
+                            );
+                            Ok(ForthExp::Op(ForthOp::BeginWhile(self.cur)))
+                        }
+                    }
+                }
+                t => parse_word(t),
+            };
+            parsed_tokens.push(parsed_token?);
+            prev_token = token;
+            self.cur += 1;
         }
+        Ok(parsed_tokens)
     }
 
-    fn parse_simple(&mut self, tokens: Vec<String>) -> ForthResult<Vec<ForthExp>> {
-        let mut res = vec![];
-        for token in tokens {
-            res.push(parse_word(token.as_str())?)
-        }
-        Ok(res)
-    }
-
-    fn parse_if(&mut self) -> ForthResult<(Vec<ForthExp>, Option<Vec<ForthExp>>)> {
+    fn parse_if(
+        &mut self,
+        tokens: &mut Iter<String>,
+        res: &mut ParserResult,
+    ) -> ForthResult<(Vec<ForthExp>, Option<Vec<ForthExp>>)> {
         let mut then: Vec<String> = vec![];
         let mut r#else: Vec<String> = vec![];
         let mut else_found = false;
-        while let Ok(token) = self.next() {
+        while let Some(token) = tokens.next() {
             match token.as_str() {
                 "then" => break,
                 "else" => else_found = true,
-                _ => {
+                t => {
                     if else_found {
-                        r#else.push(token)
+                        r#else.push(t.to_string())
                     } else {
-                        then.push(token);
+                        then.push(t.to_string());
                     }
                 }
             }
         }
-        let then_parsed = self.parse_simple(then)?;
+        let then_parsed = self.parse_simple(then, res)?;
         if else_found {
-            let else_parsed = self.parse_simple(r#else)?;
+            let else_parsed = self.parse_simple(r#else, res)?;
             Ok((then_parsed, Some(else_parsed)))
         } else {
             Ok((then_parsed, None))
+        }
+    }
+
+    fn parse_cycle(
+        &mut self,
+        tokens: &mut Iter<String>,
+        res: &mut ParserResult,
+    ) -> ForthResult<(Vec<ForthExp>, Option<Vec<ForthExp>>)> {
+        let mut body1 = vec![];
+        let mut body2 = vec![];
+        let mut while_found = false;
+        while let Some(token) = tokens.next() {
+            match token.as_str() {
+                "until" => {
+                    if while_found {
+                        return Err(ForthErr::Msg("unexpected until".to_string()));
+                    } else {
+                        break;
+                    }
+                }
+                "repeat" => {
+                    if !while_found {
+                        return Err(ForthErr::Msg("unexpected repeat".to_string()));
+                    } else {
+                        break;
+                    }
+                }
+                "while" => while_found = true,
+                _ => {
+                    if while_found {
+                        body2.push(token.to_string());
+                    } else {
+                        body1.push(token.to_string());
+                    }
+                }
+            }
+        }
+        let body1_parsed = self.parse_simple(body1, res)?;
+        if while_found {
+            let body2_parsed = self.parse_simple(body2, res)?;
+            Ok((body1_parsed, Some(body2_parsed)))
+        } else {
+            Ok((body1_parsed, None))
         }
     }
 }
@@ -193,7 +254,7 @@ fn parse_word(token: &str) -> ForthResult<ForthExp> {
     let res = match potential_int {
         Ok(v) => ForthExp::Number(v),
         Err(_) => {
-            let op = match token.to_ascii_lowercase().as_str() {
+            let op = match token {
                 "+" => ForthOp::Add,
                 "-" => ForthOp::Sub,
                 "*" => ForthOp::Mul,

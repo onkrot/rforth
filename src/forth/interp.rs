@@ -76,7 +76,7 @@ impl ForthInterp {
     pub fn push(&mut self, exp: ForthExp) {
         self.stack.push(exp);
     }
-    pub fn get_op(&self, op: ForthOp) -> ForthResult<ForthFunc> {
+    pub fn eval_op(&self, op: ForthOp) -> ForthResult<ForthFunc> {
         let func = match op {
             ForthOp::Add => n_ary_op!(2, |x: [i64; 2]| x[1].wrapping_add(x[0])),
             ForthOp::Sub => n_ary_op!(2, |x: [i64; 2]| x[1].wrapping_sub(x[0])),
@@ -220,6 +220,16 @@ impl ForthInterp {
                 .get(&ForthOp::IfThenElse(num))
                 .ok_or(ForthErr::Msg(format!("No body for if at {}", num)))?
                 .clone(),
+            ForthOp::BeginUntil(num) => self
+                .words
+                .get(&ForthOp::BeginUntil(num))
+                .ok_or(ForthErr::Msg(format!("No body for cycle at {}", num)))?
+                .clone(),
+            ForthOp::BeginWhile(num) => self
+                .words
+                .get(&ForthOp::BeginWhile(num))
+                .ok_or(ForthErr::Msg(format!("No body for cycle at {}", num)))?
+                .clone(),
         };
 
         Ok(func)
@@ -227,7 +237,7 @@ impl ForthInterp {
     pub fn eval(&mut self, exp: ForthExp) -> ForthResult<()> {
         match exp {
             ForthExp::Op(op) => {
-                let func = self.get_op(op)?.clone();
+                let func = self.eval_op(op)?.clone();
                 match func {
                     ForthFunc::Native(f) => f(self)?,
                     ForthFunc::User(v) => {
@@ -269,6 +279,27 @@ impl ForthInterp {
                         let num = self.pop_num()?;
                         self.variables.insert(name, num);
                     }
+                    ForthFunc::BeginUntil(v) => {
+                        let mut a = 0;
+                        while a == 0 {
+                            for e in &v {
+                                self.eval(e.clone())?;
+                            }
+                            a = self.pop_num()?;
+                        }
+                    }
+                    ForthFunc::BeginWhile(head, body) => loop {
+                        for e in &head {
+                            self.eval(e.clone())?;
+                        }
+                        let a = self.pop_num()?;
+                        if a == 0 {
+                            break;
+                        }
+                        for e in &body {
+                            self.eval(e.clone())?;
+                        }
+                    },
                 }
             }
             ForthExp::Number(a) => self.push(ForthExp::Number(a)),
